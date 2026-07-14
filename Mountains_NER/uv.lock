@@ -1056,6 +1056,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "seaborn" },
     { name = "torch" },
+    { name = "tqdm" },
     { name = "transformers" },
 ]
 
@@ -1072,6 +1073,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "torch", specifier = ">=2.13.0" },
+    { name = "tqdm", specifier = ">=4.68.4" },
     { name = "transformers", specifier = ">=5.13.1" },
 ]
 
