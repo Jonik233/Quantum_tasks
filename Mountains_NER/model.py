@@ -1,13 +1,17 @@
+import os
 import torch.nn as nn
+from dotenv import load_dotenv
 from transformers import DistilBertModel
+
+load_dotenv()
 
 
 class DistilBERTClass(nn.Module):
-    def __init__(self, model_name="distilbert-base-cased", num_labels=7):
+    def __init__(self, model_name="distilbert-base-cased", num_labels=3):
         super().__init__()
 
         # Loading raw BERT (produces contextual token embeddings)
-        self.encoder = DistilBertModel.from_pretrained(model_name)
+        self.encoder = DistilBertModel.from_pretrained(model_name, cache_dir=os.environ["BERT_CACHE_DIR"])
         hidden_size = self.encoder.config.hidden_size
 
         # Model head (produces logits)
@@ -31,21 +35,3 @@ class DistilBERTClass(nn.Module):
         logits = self.classifier(activation_scores)  # Output shape: (batch_size, seq_len, num_labels)
 
         return logits
-
-
-        # # Manually compute loss if labels are provided (useful during training)
-        # loss = None
-        # if labels is not None:
-        #     loss_fn = nn.CrossEntropyLoss()
-        #     # Only keep active parts of the loss (ignore padding or subword dummy tags like -100)
-        #     if attention_mask is not None:
-        #         active_loss = attention_mask.view(-1) == 1
-        #         active_logits = logits.view(-1, self.classifier.out_features)
-        #         active_labels = torch.where(
-        #             active_loss, labels.view(-1), torch.tensor(loss_fn.ignore_index).type_as(labels)
-        #         )
-        #         loss = loss_fn(active_logits, active_labels)
-        #     else:
-        #         loss = loss_fn(logits.view(-1, self.classifier.out_features), labels.view(-1))
-        #
-        # return {"loss": loss, "logits": logits} if loss is not None else {"logits": logits}
