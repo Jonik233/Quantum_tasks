@@ -1,4 +1,3 @@
-import torch
 import pandas as pd
 from typing import List, Dict
 from torch.utils.data import Dataset
@@ -37,7 +36,7 @@ class MountainsDataset(Dataset):
         return labels
 
 
-    def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, index: int) -> Dict[str, List[int]]:
         record = self.data.iloc[index]
         text = record.text
         spans = record.marker
@@ -52,9 +51,9 @@ class MountainsDataset(Dataset):
         labels = self.__align_labels(offsets, spans)
 
         return {
-            'input_ids': torch.tensor(inputs['input_ids'], dtype=torch.long),
-            'attention_mask': torch.tensor(inputs['attention_mask'], dtype=torch.long),
-            'labels': torch.tensor(labels, dtype=torch.long)
+            'input_ids': inputs['input_ids'],
+            'attention_mask': inputs['attention_mask'],
+            'labels': labels
         }
 
 
