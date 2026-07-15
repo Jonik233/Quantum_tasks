@@ -1,9 +1,5 @@
-import os
 import torch.nn as nn
-from dotenv import load_dotenv
 from transformers import DistilBertModel
-
-load_dotenv()
 
 
 class DistilBERTClass(nn.Module):
@@ -11,7 +7,7 @@ class DistilBERTClass(nn.Module):
         super().__init__()
 
         # Loading raw BERT (produces contextual token embeddings)
-        self.encoder = DistilBertModel.from_pretrained(model_name, cache_dir=os.environ["BERT_CACHE_DIR"])
+        self.encoder = DistilBertModel.from_pretrained(model_name)
         hidden_size = self.encoder.config.hidden_size
 
         # Model head (produces logits)
