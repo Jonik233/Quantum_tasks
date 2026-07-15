@@ -3,3 +3,5 @@
 .ipynb_checkpoints/
 .env
 __pycache__
+tokenizer_cache
+bert_cache
