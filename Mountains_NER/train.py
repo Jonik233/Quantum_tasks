@@ -1,5 +1,6 @@
 import os
 import torch
+import evaluate
 import argparse
 from tqdm import tqdm
 import torch.nn as nn
@@ -7,11 +8,16 @@ from config import label_names
 from model import DistilBERTClass
 from data_utils import load_dataloaders
 from transformers import DistilBertTokenizerFast
+from evaluation import compute_metrics, print_metrics
 
 
-def train(epoch, model, device, train_dataloader, optimizer, loss_function):
+def train(epoch, model, device, train_dataloader, optimizer, loss_function, metrics_evaluator):
     model.train()
     total_train_loss = 0
+
+    # Used during epoch evaluation
+    epoch_logits = list()
+    epoch_labels = list()
 
     for batch in tqdm(train_dataloader, desc="Training"):
         input_ids = batch['input_ids'].to(device)
@@ -34,14 +40,25 @@ def train(epoch, model, device, train_dataloader, optimizer, loss_function):
 
         total_train_loss += loss.item()
 
+        epoch_logits.append(logits.detach().cpu().numpy())
+        epoch_labels.append(labels.detach().cpu().numpy())
+
     epoch_loss = total_train_loss / len(train_dataloader)
-    print(f"Epoch {epoch+1} Train Loss: {epoch_loss:.4f}")
+    epoch_metrics = compute_metrics(metrics_evaluator, epoch_logits, epoch_labels)
+
+    print(f"\nEpoch {epoch+1}: (Training phase)\n" + "-"*60)
+    print(f"Train Loss: {epoch_loss:.4f}")
+    print_metrics(epoch_metrics, phase="Training")
 
 
 @torch.no_grad()
-def validate(epoch, model, device, val_dataloader, loss_function):
+def validate(epoch, model, device, val_dataloader, loss_function, metrics_evaluator):
     model.eval()
     total_val_loss = 0
+
+    # Used during epoch evaluation
+    epoch_logits = list()
+    epoch_labels = list()
 
     for batch in tqdm(val_dataloader, desc="Validation"):
         input_ids = batch['input_ids'].to(device)
@@ -56,8 +73,15 @@ def validate(epoch, model, device, val_dataloader, loss_function):
         loss = loss_function(active_logits, active_labels)
         total_val_loss += loss.item()
 
+        epoch_logits.append(logits.detach().cpu().numpy())
+        epoch_labels.append(labels.detach().cpu().numpy())
+
     epoch_loss = total_val_loss / len(val_dataloader)
-    print(f"Epoch {epoch+1} Val Loss: {epoch_loss:.4f}")
+    epoch_metrics = compute_metrics(metrics_evaluator, epoch_logits, epoch_labels)
+
+    print(f"\nEpoch {epoch+1}: (Validation phase)\n" + "-"*60)
+    print(f"Val Loss: {epoch_loss:.4f}")
+    print_metrics(epoch_metrics, phase="Validation")
 
     return epoch_loss
 
@@ -72,33 +96,32 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=2e-5)
 
     args = parser.parse_args()
+    EPOCHS = args.epochs
+    LEARNING_RATE = args.learning_rate
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-cased",
                                                         use_fast=True,
-                                                        cache_dir="./tokenizer")
+                                                        cache_dir=os.environ["TOKENIZER_CACHE_DIR"])
 
     train_dataloader, val_dataloader = load_dataloaders(tokenizer)
 
     model = DistilBERTClass()
     model.to(device)
 
-    LEARNING_RATE = args.learning_rate
     optimizer = torch.optim.Adam(params=model.parameters(), lr=LEARNING_RATE)
-
     loss_function = nn.CrossEntropyLoss(ignore_index=-100)
 
-    EPOCHS = args.epochs
-
+    evaluator = evaluate.load("seqeval")
     best_val_loss = float('inf')
     output_dir = os.environ["SAVE_MODEL_DIR"]
     os.makedirs(output_dir, exist_ok=True)
 
     for epoch in range(EPOCHS):
-        print(f"Starting epoch: {epoch+1}")
-        train(epoch, model, device, train_dataloader, optimizer, loss_function)
-        val_loss = validate(epoch, model, device, val_dataloader, loss_function)
+        print(f"\n======== Starting epoch: {epoch+1} ========")
+        train(epoch, model, device, train_dataloader, optimizer, loss_function, evaluator)
+        val_loss = validate(epoch, model, device, val_dataloader, loss_function, evaluator)
 
         # Model checkpointing
         if val_loss < best_val_loss:
