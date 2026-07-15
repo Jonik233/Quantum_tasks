@@ -87,7 +87,7 @@ def validate(epoch, model, device, val_dataloader, loss_function, metrics_evalua
 
 
 def main():
-    print("TRAINING STARTED")
+    print("\n======== TRAINING STARTED ========")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=1)
@@ -95,18 +95,38 @@ def main():
     parser.add_argument("--valid_batch_size", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=2e-5)
 
+    # SageMaker injects these environment variables automatically
+    parser.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAIN"))
+    parser.add_argument("--valid", type=str, default=os.environ.get("SM_CHANNEL_VALID"))
+    parser.add_argument("--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR"))
+
     args = parser.parse_args()
     EPOCHS = args.epochs
     LEARNING_RATE = args.learning_rate
+    TRAIN_BATCH_SIZE = args.train_batch_size
+    VAL_BATCH_SIZE = args.valid_batch_size
+
+    tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-cased", use_fast=True)
+
+    train_parameters = {
+        "batch_size": TRAIN_BATCH_SIZE,
+        "shuffle": True,
+        "num_workers": 0
+    }
+
+    val_parameters = {
+        "batch_size": VAL_BATCH_SIZE,
+        "shuffle": True,
+        "num_workers": 0
+    }
+
+    train_dataloader, val_dataloader = load_dataloaders(tokenizer=tokenizer,
+                                                        train_parameters=train_parameters,
+                                                        val_parameters=val_parameters,
+                                                        train_data_path=args.train,
+                                                        val_data_path=args.valid)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-cased",
-                                                        use_fast=True,
-                                                        cache_dir=os.environ["TOKENIZER_CACHE_DIR"])
-
-    train_dataloader, val_dataloader = load_dataloaders(tokenizer)
-
     model = DistilBERTClass()
     model.to(device)
 
@@ -115,7 +135,7 @@ def main():
 
     evaluator = evaluate.load("seqeval")
     best_val_loss = float('inf')
-    output_dir = os.environ["SAVE_MODEL_DIR"]
+    output_dir = args.model_dir
     os.makedirs(output_dir, exist_ok=True)
 
     for epoch in range(EPOCHS):
