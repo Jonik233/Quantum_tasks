@@ -5,3 +5,4 @@
 __pycache__
 tokenizer_cache
 bert_cache
+data
