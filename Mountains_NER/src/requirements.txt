@@ -1,3 +1,4 @@
+# This requirements.txt is used by sagemaker during trainig job to install additonal dependencies
 evaluate
 seqeval
 pandas
