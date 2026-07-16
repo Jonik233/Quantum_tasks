@@ -2,3 +2,4 @@
 evaluate
 seqeval
 pandas
+matplotlib
