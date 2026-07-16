@@ -13,13 +13,23 @@ from evaluation import compute_metrics, print_metrics
 
 def train(epoch, model, device, train_dataloader, optimizer, loss_function, metrics_evaluator):
     model.train()
-    total_train_loss = 0
 
     # Used during epoch evaluation
-    epoch_logits = list()
+    epoch_predictions = list()
     epoch_labels = list()
+    tracked_loss = 0
+    tracked_batches = 0
+    total_batches = len(train_dataloader)
 
-    for batch in tqdm(train_dataloader, desc="Training"):
+    # Start collecting metrics and loss at the 66% mark (last third) for Epoch 1
+    if epoch == 0:
+        start_metric_idx = int(2 * total_batches / 3)
+    else:
+        # For subsequent epochs, collect metrics for the entire epoch
+        start_metric_idx = 0
+
+
+    for batch_idx, batch in enumerate(tqdm(train_dataloader, desc="Training")):
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
@@ -38,27 +48,30 @@ def train(epoch, model, device, train_dataloader, optimizer, loss_function, metr
         loss.backward()
         optimizer.step()
 
-        total_train_loss += loss.item()
+        if batch_idx > start_metric_idx:
+            tracked_loss += loss.item()
+            tracked_batches += 1
 
-        epoch_logits.append(logits.detach().cpu().numpy())
-        epoch_labels.append(labels.detach().cpu().numpy())
+            predictions = torch.argmax(logits, dim=-1).detach().cpu().numpy()
 
-    epoch_loss = total_train_loss / len(train_dataloader)
-    epoch_metrics = compute_metrics(metrics_evaluator, epoch_logits, epoch_labels)
+            epoch_predictions.append(predictions)
+            epoch_labels.append(labels.detach().cpu().numpy())
+
+    epoch_loss = tracked_loss /  max(1, tracked_batches)
+    epoch_metrics = compute_metrics(metrics_evaluator, epoch_predictions, epoch_labels)
 
     print(f"\nEpoch {epoch+1}: (Training phase)\n" + "-"*60)
-    print(f"Train Loss: {epoch_loss:.4f}")
-    print_metrics(epoch_metrics, phase="Training")
+    print_metrics(epoch_loss, epoch_metrics, phase="Training")
 
 
 @torch.no_grad()
 def validate(epoch, model, device, val_dataloader, loss_function, metrics_evaluator):
     model.eval()
-    total_val_loss = 0
 
     # Used during epoch evaluation
-    epoch_logits = list()
+    epoch_predictions = list()
     epoch_labels = list()
+    tracked_loss = 0
 
     for batch in tqdm(val_dataloader, desc="Validation"):
         input_ids = batch['input_ids'].to(device)
@@ -71,17 +84,18 @@ def validate(epoch, model, device, val_dataloader, loss_function, metrics_evalua
         active_labels = labels.view(-1)
 
         loss = loss_function(active_logits, active_labels)
-        total_val_loss += loss.item()
+        tracked_loss += loss.item()
 
-        epoch_logits.append(logits.detach().cpu().numpy())
+        predictions = torch.argmax(logits, dim=-1).detach().cpu().numpy()
+
+        epoch_predictions.append(predictions)
         epoch_labels.append(labels.detach().cpu().numpy())
 
-    epoch_loss = total_val_loss / len(val_dataloader)
-    epoch_metrics = compute_metrics(metrics_evaluator, epoch_logits, epoch_labels)
+    epoch_loss = tracked_loss / len(val_dataloader)
+    epoch_metrics = compute_metrics(metrics_evaluator, epoch_predictions, epoch_labels)
 
     print(f"\nEpoch {epoch+1}: (Validation phase)\n" + "-"*60)
-    print(f"Val Loss: {epoch_loss:.4f}")
-    print_metrics(epoch_metrics, phase="Validation")
+    print_metrics(epoch_loss, epoch_metrics, phase="Validation")
 
     return epoch_loss
 
