@@ -1,4 +1,15 @@
 Synthetic data generation:
-    - Model: gpt-5.4-mini
-    - Generated 1007 records
-    - Costs: 15 cents
+------------------------------------------------
+- Model: gpt-5.4-mini
+- Generated 1007 records
+- Costs: around 15 cents
+
+
+
+Training:
+------------------------------------------------
+- instance_count=1,
+- instance_type="ml.g6.2xlarge"
+- Training seconds: 265
+- Billable seconds: 265
+- Total costs: around 8 cents
