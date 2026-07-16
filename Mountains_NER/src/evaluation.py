@@ -1,19 +1,17 @@
-import numpy as np
 from config import label_names
 
 
-def compute_metrics(evaluator, epoch_logits, epoch_labels):
+def compute_metrics(evaluator, epoch_predictions, epoch_labels):
     """
     Computes seqeval metrics for an entire epoch.
-    epoch_logits: List of numpy arrays of shape (batch_size, seq_len, num_labels)
+    epoch_predictions: List of numpy arrays of shape (batch_size, seq_len)
     epoch_labels: List of numpy arrays of shape (batch_size, seq_len)
     """
     mapped_predictions = []
     mapped_labels = []
 
     # Iterate through each batch in the epoch
-    for batch_logits, batch_labels in zip(epoch_logits, epoch_labels):
-        batch_predictions = np.argmax(batch_logits, axis=-1)
+    for batch_predictions, batch_labels in zip(epoch_predictions, epoch_labels):
 
         # Iterate through each sequence in the batch
         for seq_predictions, seq_labels in zip(batch_predictions, batch_labels):
@@ -34,11 +32,12 @@ def compute_metrics(evaluator, epoch_logits, epoch_labels):
     return metrics
 
 
-def print_metrics(metrics: dict, phase: str):
+def print_metrics(loss, metrics: dict, phase: str):
     """
-    Prints the calculated seqeval metrics.
+    Prints the calculated metrics.
     """
-    print(f"\n--- {phase} Metrics ---")
+    print(f"\n\n--- {phase} Metrics ---")
+    print(f"\tLoss: {loss:.4f}")
     print(f"Overall Precision: {metrics.get('overall_precision', 0):.4f}")
     print(f"Overall Recall:    {metrics.get('overall_recall', 0):.4f}")
     print(f"Overall F1:        {metrics.get('overall_f1', 0):.4f}")
@@ -46,7 +45,7 @@ def print_metrics(metrics: dict, phase: str):
 
     # Entity-level metrics
     if "MOUNTAIN" in metrics:
-        print("\nEntity Level (MOUNTAIN):")
+        print("\n\nEntity Level (MOUNTAIN):")
         print(f"  Precision: {metrics['MOUNTAIN']['precision']:.4f}")
         print(f"  Recall:    {metrics['MOUNTAIN']['recall']:.4f}")
         print(f"  F1:        {metrics['MOUNTAIN']['f1']:.4f}")
