@@ -8,7 +8,7 @@ from config import label_names
 from model import DistilBERTClass
 from data_utils import load_dataloaders
 from transformers import DistilBertTokenizerFast
-from evaluation import compute_metrics, print_metrics
+from evaluation import compute_metrics, print_metrics, save_metrics_plot
 
 
 def train(epoch, model, device, train_dataloader, optimizer, loss_function, metrics_evaluator):
@@ -21,13 +21,12 @@ def train(epoch, model, device, train_dataloader, optimizer, loss_function, metr
     tracked_batches = 0
     total_batches = len(train_dataloader)
 
-    # Start collecting metrics and loss at the 66% mark (last third) for Epoch 1
+    # Start collecting metrics and loss at the 80% mark (last fifth) for Epoch 1
     if epoch == 0:
-        start_metric_idx = int(2 * total_batches / 3)
+        start_metric_idx = int(4 * total_batches / 5)
     else:
         # For subsequent epochs, collect metrics for the entire epoch
         start_metric_idx = 0
-
 
     for batch_idx, batch in enumerate(tqdm(train_dataloader, desc="Training")):
         input_ids = batch['input_ids'].to(device)
@@ -60,8 +59,10 @@ def train(epoch, model, device, train_dataloader, optimizer, loss_function, metr
     epoch_loss = tracked_loss /  max(1, tracked_batches)
     epoch_metrics = compute_metrics(metrics_evaluator, epoch_predictions, epoch_labels)
 
-    print(f"\nEpoch {epoch+1}: (Training phase)\n" + "-"*60)
+    print(f"\n\nEpoch {epoch+1}: (Training phase)\n" + "-"*60)
     print_metrics(epoch_loss, epoch_metrics, phase="Training")
+
+    return epoch_loss, epoch_metrics
 
 
 @torch.no_grad()
@@ -97,11 +98,11 @@ def validate(epoch, model, device, val_dataloader, loss_function, metrics_evalua
     print(f"\nEpoch {epoch+1}: (Validation phase)\n" + "-"*60)
     print_metrics(epoch_loss, epoch_metrics, phase="Validation")
 
-    return epoch_loss
+    return epoch_loss, epoch_metrics
 
 
 def main():
-    print("\n======== TRAINING STARTED ========")
+    print("\n================ TRAINING STARTED ================")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=1)
@@ -113,6 +114,7 @@ def main():
     parser.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAIN"))
     parser.add_argument("--valid", type=str, default=os.environ.get("SM_CHANNEL_VALID"))
     parser.add_argument("--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR"))
+    parser.add_argument("--output_data_dir", type=str, default=os.environ.get("SM_OUTPUT_DATA_DIR"))
 
     args = parser.parse_args()
     EPOCHS = args.epochs
@@ -152,16 +154,45 @@ def main():
     output_dir = args.model_dir
     os.makedirs(output_dir, exist_ok=True)
 
+    history = {
+        'train_loss': [], 'val_loss': [],
+        'train_precision': [], 'val_precision': [],
+        'train_recall': [], 'val_recall': [],
+        'train_f1': [], 'val_f1': [],
+        'train_accuracy': [], 'val_accuracy': []
+    }
+
     for epoch in range(EPOCHS):
-        print(f"\n======== Starting epoch: {epoch+1} ========")
-        train(epoch, model, device, train_dataloader, optimizer, loss_function, evaluator)
-        val_loss = validate(epoch, model, device, val_dataloader, loss_function, evaluator)
+        print(f"\n================ Starting epoch: {epoch+1} ================")
+
+        train_loss, train_metrics = train(epoch, model, device, train_dataloader, optimizer, loss_function, evaluator)
+        val_loss, val_metrics = validate(epoch, model, device, val_dataloader, loss_function, evaluator)
+
+        # Track epoch metrics
+        history['train_loss'].append(train_loss)
+        history['val_loss'].append(val_loss)
+
+        history['train_precision'].append(train_metrics.get('overall_precision', 0))
+        history['val_precision'].append(val_metrics.get('overall_precision', 0))
+
+        history['train_recall'].append(train_metrics.get('overall_recall', 0))
+        history['val_recall'].append(val_metrics.get('overall_recall', 0))
+
+        history['train_f1'].append(train_metrics.get('overall_f1', 0))
+        history['val_f1'].append(val_metrics.get('overall_f1', 0))
+
+        history['train_accuracy'].append(train_metrics.get('overall_accuracy', 0))
+        history['val_accuracy'].append(val_metrics.get('overall_accuracy', 0))
 
         # Model checkpointing
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), os.path.join(output_dir, "best_model.bin"))
             tokenizer.save_pretrained(output_dir)
+
+    plot_dir = args.output_data_dir
+    os.makedirs(plot_dir, exist_ok=True)
+    save_metrics_plot(history, plot_dir)
 
 
 if __name__ == "__main__":
