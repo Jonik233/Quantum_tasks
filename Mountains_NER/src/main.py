@@ -19,7 +19,9 @@ huggingface_estimator = HuggingFace(
         "epochs": 3,
         "train_batch_size": 16,
         "valid_batch_size": 16,
-        "learning_rate": 2e-5
+        "learning_rate": 2e-5,
+        "mlflow_tracking_arn": "arn:aws:sagemaker:eu-central-1:519763207317:mlflow-app/app-WHR2A5CWRLEK",
+        "mlflow_experiment_name": "DistilBert_FineTuning",
     },
     enable_sagemaker_metrics=True
 )
