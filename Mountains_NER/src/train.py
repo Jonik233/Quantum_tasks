@@ -1,86 +1,86 @@
 import os
 import torch
+import mlflow
 import evaluate
 import argparse
 from tqdm import tqdm
 import torch.nn as nn
+from logging_utils import logger
 from config import label_names
 from model import DistilBERTClass
 from data_utils import load_dataloaders
 from transformers import DistilBertTokenizerFast
-from evaluation import compute_metrics, print_metrics, save_metrics_plot
+from evaluation import compute_metrics, log_metrics
 
 
-def train(epoch, model, device, train_dataloader, optimizer, loss_function, metrics_evaluator):
+def train(epoch, model, device, train_dataloader, optimizer, loss_function,
+          metrics_evaluator, global_step, log_every_n_batches=20):
     model.train()
 
-    # Used during epoch evaluation
     epoch_predictions = list()
     epoch_labels = list()
-    tracked_loss = 0
-    tracked_batches = 0
-    total_batches = len(train_dataloader)
+    tracked_loss = 0.0
+    window_loss = 0.0
 
-    # Start collecting metrics and loss at the 80% mark (last fifth) for Epoch 1
-    if epoch == 0:
-        start_metric_idx = int(4 * total_batches / 5)
-    else:
-        # For subsequent epochs, collect metrics for the entire epoch
-        start_metric_idx = 0
+    progress_bar = tqdm(train_dataloader, desc=f"Training Epoch {epoch + 1}")
 
-    for batch_idx, batch in enumerate(tqdm(train_dataloader, desc="Training")):
+    for batch_idx, batch in enumerate(progress_bar):
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
 
         optimizer.zero_grad()
-
-        # Returns logits of shape: batch_size, seq_len, num_labels
         logits = model(input_ids=input_ids, attention_mask=attention_mask)
 
-        # Flatten logits and labels to compute loss
-        active_logits = logits.view(-1, (len(label_names)))
+        active_logits = logits.view(-1, len(label_names))
         active_labels = labels.view(-1)
-
         loss = loss_function(active_logits, active_labels)
 
         loss.backward()
         optimizer.step()
 
-        if batch_idx > start_metric_idx:
-            tracked_loss += loss.item()
-            tracked_batches += 1
+        global_step += 1
+        tracked_loss += loss.item()
+        window_loss += loss.item()
 
-            predictions = torch.argmax(logits, dim=-1).detach().cpu().numpy()
+        # Streaming Training Loss to MLflow and updating terminal
+        if global_step % log_every_n_batches == 0:
+            avg_window_loss = window_loss / log_every_n_batches
+            mlflow.log_metric("train_loss_step", avg_window_loss, step=global_step)
+            progress_bar.set_postfix({"Loss": f"{avg_window_loss:.4f}"})
+            window_loss = 0.0
 
-            epoch_predictions.append(predictions)
-            epoch_labels.append(labels.detach().cpu().numpy())
+        predictions = torch.argmax(logits, dim=-1).detach().cpu().numpy()
+        epoch_predictions.append(predictions)
+        epoch_labels.append(labels.detach().cpu().numpy())
 
-    epoch_loss = tracked_loss /  max(1, tracked_batches)
-    epoch_metrics = compute_metrics(metrics_evaluator, epoch_predictions, epoch_labels)
+    # Calculating epoch-wise train metrics
+    epoch_train_loss = tracked_loss / len(train_dataloader)
+    train_metrics = compute_metrics(metrics_evaluator, epoch_predictions, epoch_labels)
 
-    print(f"\n\nEpoch {epoch+1}: (Training phase)\n" + "-"*60)
-    print_metrics(epoch_loss, epoch_metrics, phase="Training")
+    # Loging epoch-wise metrics to MLflow
+    log_metrics(epoch_train_loss, train_metrics, phase="Validation", step=epoch)
+    mlflow.log_metric("train_f1_epoch", train_metrics.get('overall_f1', 0), step=epoch)
+    mlflow.log_metric("train_precision_epoch", train_metrics.get('overall_precision', 0), step=epoch)
+    mlflow.log_metric("train_recall_epoch", train_metrics.get('overall_recall', 0), step=epoch)
 
-    return epoch_loss, epoch_metrics
+    return global_step
 
 
 @torch.no_grad()
 def validate(epoch, model, device, val_dataloader, loss_function, metrics_evaluator):
     model.eval()
 
-    # Used during epoch evaluation
-    epoch_predictions = list()
-    epoch_labels = list()
+    val_predictions = []
+    val_labels = []
     tracked_loss = 0
 
-    for batch in tqdm(val_dataloader, desc="Validation"):
+    for batch in tqdm(val_dataloader, desc=f"Validation Epoch {epoch + 1}"):
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
 
         logits = model(input_ids=input_ids, attention_mask=attention_mask)
-
         active_logits = logits.view(-1, len(label_names))
         active_labels = labels.view(-1)
 
@@ -88,111 +88,86 @@ def validate(epoch, model, device, val_dataloader, loss_function, metrics_evalua
         tracked_loss += loss.item()
 
         predictions = torch.argmax(logits, dim=-1).detach().cpu().numpy()
+        val_predictions.append(predictions)
+        val_labels.append(labels.detach().cpu().numpy())
 
-        epoch_predictions.append(predictions)
-        epoch_labels.append(labels.detach().cpu().numpy())
+    avg_val_loss = tracked_loss / len(val_dataloader)
+    val_metrics = compute_metrics(metrics_evaluator, val_predictions, val_labels)
 
-    epoch_loss = tracked_loss / len(val_dataloader)
-    epoch_metrics = compute_metrics(metrics_evaluator, epoch_predictions, epoch_labels)
+    # Log to MLflow and Console
+    log_metrics(avg_val_loss, val_metrics, phase="Validation", step=epoch)
+    mlflow.log_metric("val_loss_epoch", avg_val_loss, step=epoch)
+    mlflow.log_metric("val_f1_epoch", val_metrics.get('overall_f1', 0), step=epoch)
+    mlflow.log_metric("val_precision_epoch", val_metrics.get('overall_precision', 0), step=epoch)
+    mlflow.log_metric("val_recall_epoch", val_metrics.get('overall_recall', 0), step=epoch)
 
-    print(f"\nEpoch {epoch+1}: (Validation phase)\n" + "-"*60)
-    print_metrics(epoch_loss, epoch_metrics, phase="Validation")
-
-    return epoch_loss, epoch_metrics
+    return avg_val_loss
 
 
 def main():
-    print("\n================ TRAINING STARTED ================")
+    logger.info("================ TRAINING STARTED ================")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--train_batch_size", type=int, default=8)
     parser.add_argument("--valid_batch_size", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=2e-5)
+    parser.add_argument("--log_every_n_batches", type=int, default=20)
 
-    # SageMaker injects these environment variables automatically
+    parser.add_argument("--mlflow_tracking_arn", type=str, required=True)
+    parser.add_argument("--mlflow_experiment_name", type=str, default="Mountains_NER_Experiment")
+
     parser.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAIN"))
     parser.add_argument("--valid", type=str, default=os.environ.get("SM_CHANNEL_VALID"))
     parser.add_argument("--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR"))
-    parser.add_argument("--output_data_dir", type=str, default=os.environ.get("SM_OUTPUT_DATA_DIR"))
 
     args = parser.parse_args()
-    EPOCHS = args.epochs
-    LEARNING_RATE = args.learning_rate
-    TRAIN_BATCH_SIZE = args.train_batch_size
-    VAL_BATCH_SIZE = args.valid_batch_size
+
+    mlflow.set_tracking_uri(args.mlflow_tracking_arn)
+    mlflow.set_experiment(args.mlflow_experiment_name)
 
     tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-cased", use_fast=True)
 
-    train_parameters = {
-        "batch_size": TRAIN_BATCH_SIZE,
-        "shuffle": True,
-        "num_workers": 0
-    }
-
-    val_parameters = {
-        "batch_size": VAL_BATCH_SIZE,
-        "shuffle": True,
-        "num_workers": 0
-    }
-
-    train_dataloader, val_dataloader = load_dataloaders(tokenizer=tokenizer,
-                                                        train_parameters=train_parameters,
-                                                        val_parameters=val_parameters,
-                                                        train_data_path=args.train,
-                                                        val_data_path=args.valid)
+    train_dataloader, val_dataloader = load_dataloaders(
+        tokenizer=tokenizer,
+        train_parameters={"batch_size": args.train_batch_size, "shuffle": True, "num_workers": 0},
+        val_parameters={"batch_size": args.valid_batch_size, "shuffle": True, "num_workers": 0},
+        train_data_path=args.train,
+        val_data_path=args.valid
+    )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = DistilBERTClass()
-    model.to(device)
+    model = DistilBERTClass().to(device)
 
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=args.learning_rate)
     loss_function = nn.CrossEntropyLoss(ignore_index=-100)
-
     evaluator = evaluate.load("seqeval")
-    best_val_loss = float('inf')
+
     output_dir = args.model_dir
     os.makedirs(output_dir, exist_ok=True)
+    best_val_loss = float('inf')
+    global_step = 0
 
-    history = {
-        'train_loss': [], 'val_loss': [],
-        'train_precision': [], 'val_precision': [],
-        'train_recall': [], 'val_recall': [],
-        'train_f1': [], 'val_f1': [],
-        'train_accuracy': [], 'val_accuracy': []
-    }
+    # Initialize MLflow Run
+    with mlflow.start_run():
+        mlflow.log_params({
+            "epochs": args.epochs,
+            "learning_rate": args.learning_rate,
+            "train_batch_size": args.train_batch_size
+        })
 
-    for epoch in range(EPOCHS):
-        print(f"\n================ Starting epoch: {epoch+1} ================")
+        for epoch in range(args.epochs):
+            logger.info(f"================ Starting epoch: {epoch + 1} ================")
 
-        train_loss, train_metrics = train(epoch, model, device, train_dataloader, optimizer, loss_function, evaluator)
-        val_loss, val_metrics = validate(epoch, model, device, val_dataloader, loss_function, evaluator)
+            global_step = train(epoch, model, device, train_dataloader, optimizer,
+                                loss_function, evaluator, global_step, args.log_every_n_batches)
 
-        # Track epoch metrics
-        history['train_loss'].append(train_loss)
-        history['val_loss'].append(val_loss)
+            val_loss = validate(epoch, model, device, val_dataloader, loss_function, evaluator)
 
-        history['train_precision'].append(train_metrics.get('overall_precision', 0))
-        history['val_precision'].append(val_metrics.get('overall_precision', 0))
-
-        history['train_recall'].append(train_metrics.get('overall_recall', 0))
-        history['val_recall'].append(val_metrics.get('overall_recall', 0))
-
-        history['train_f1'].append(train_metrics.get('overall_f1', 0))
-        history['val_f1'].append(val_metrics.get('overall_f1', 0))
-
-        history['train_accuracy'].append(train_metrics.get('overall_accuracy', 0))
-        history['val_accuracy'].append(val_metrics.get('overall_accuracy', 0))
-
-        # Model checkpointing
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save(model.state_dict(), os.path.join(output_dir, "best_model.bin"))
-            tokenizer.save_pretrained(output_dir)
-
-    plot_dir = args.output_data_dir
-    os.makedirs(plot_dir, exist_ok=True)
-    save_metrics_plot(history, plot_dir)
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                torch.save(model.state_dict(), os.path.join(output_dir, "best_model.bin"))
+                tokenizer.save_pretrained(output_dir)
 
 
 if __name__ == "__main__":
