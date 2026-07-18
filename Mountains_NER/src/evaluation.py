@@ -1,19 +1,16 @@
-import os
 from config import label_names
-import matplotlib.pyplot as plt
+from logging_utils import logger
 
 
-def compute_metrics(evaluator, epoch_predictions, epoch_labels):
+def compute_metrics(evaluator, predictions, labels):
     """
-    Computes seqeval metrics for an entire epoch.
-    epoch_predictions: List of numpy arrays of shape (batch_size, seq_len)
-    epoch_labels: List of numpy arrays of shape (batch_size, seq_len)
+    Computes seqeval metrics for a given window of predictions.
     """
     mapped_predictions = []
     mapped_labels = []
 
     # Iterate through each batch in the epoch
-    for batch_predictions, batch_labels in zip(epoch_predictions, epoch_labels):
+    for batch_predictions, batch_labels in zip(predictions, labels):
 
         # Iterate through each sequence in the batch
         for seq_predictions, seq_labels in zip(batch_predictions, batch_labels):
@@ -34,83 +31,20 @@ def compute_metrics(evaluator, epoch_predictions, epoch_labels):
     return metrics
 
 
-def print_metrics(loss, metrics: dict, phase: str):
+def log_metrics(loss, metrics: dict, phase: str, step: int):
     """
-    Prints the calculated metrics.
+    Logs the calculated metrics to the terminal for quick checks.
     """
-    print(f"\n\n--- {phase} Metrics ---")
-    print(f"Loss: {loss:.4f}")
-    print(f"Overall Precision: {metrics.get('overall_precision', 0):.4f}")
-    print(f"Overall Recall:    {metrics.get('overall_recall', 0):.4f}")
-    print(f"Overall F1:        {metrics.get('overall_f1', 0):.4f}")
-    print(f"Overall Accuracy:  {metrics.get('overall_accuracy', 0):.4f}")
+    logger.info(f"------ {phase.upper()} METRICS (Epoch {step + 1}) ------ ")
+    logger.info(f"Loss: {loss:.4f}")
+    logger.info(f"Overall Precision: {metrics.get('overall_precision', 0):.4f}")
+    logger.info(f"Overall Recall:    {metrics.get('overall_recall', 0):.4f}")
+    logger.info(f"Overall F1:        {metrics.get('overall_f1', 0):.4f}")
+    logger.info(f"Overall Accuracy:  {metrics.get('overall_accuracy', 0):.4f}")
 
-    # Entity-level metrics
     if "MOUNTAIN" in metrics:
-        print("\n\nEntity Level (MOUNTAIN):")
-        print(f"  Precision: {metrics['MOUNTAIN']['precision']:.4f}")
-        print(f"  Recall:    {metrics['MOUNTAIN']['recall']:.4f}")
-        print(f"  F1:        {metrics['MOUNTAIN']['f1']:.4f}")
-    print("-" * 60 + "\n")
-
-
-def save_metrics_plot(history: dict, output_dir: str):
-    """
-    Generates and saves a 2x2 grid of plots for Loss, F1, Precision/Recall, and Accuracy.
-    """
-    epochs = range(1, len(history['train_loss']) + 1)
-
-    plt.figure(figsize=(14, 10))
-
-    # Loss Plot
-    plt.subplot(2, 2, 1)
-    plt.plot(epochs, history['train_loss'], label='Train Loss', marker='o', color='blue')
-    plt.plot(epochs, history['val_loss'], label='Val Loss', marker='o', color='red')
-    plt.title('Training & Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.xticks(epochs)
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
-
-    # F1 Score Plot
-    plt.subplot(2, 2, 2)
-    plt.plot(epochs, history['train_f1'], label='Train F1', marker='o', color='blue')
-    plt.plot(epochs, history['val_f1'], label='Val F1', marker='o', color='red')
-    plt.title('Overall F1 Score')
-    plt.xlabel('Epochs')
-    plt.ylabel('F1 Score')
-    plt.xticks(epochs)
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
-
-    # Precision & Recall Plot
-    plt.subplot(2, 2, 3)
-    plt.plot(epochs, history['train_precision'], label='Train Precision', linestyle='--', color='blue')
-    plt.plot(epochs, history['val_precision'], label='Val Precision', marker='o', color='blue')
-    plt.plot(epochs, history['train_recall'], label='Train Recall', linestyle='--', color='green')
-    plt.plot(epochs, history['val_recall'], label='Val Recall', marker='o', color='green')
-    plt.title('Precision and Recall')
-    plt.xlabel('Epochs')
-    plt.ylabel('Score')
-    plt.xticks(epochs)
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
-
-    # Accuracy Plot
-    plt.subplot(2, 2, 4)
-    plt.plot(epochs, history['train_accuracy'], label='Train Accuracy', marker='o', color='blue')
-    plt.plot(epochs, history['val_accuracy'], label='Val Accuracy', marker='o', color='red')
-    plt.title('Overall Accuracy')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.xticks(epochs)
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
-
-    plt.tight_layout()
-    plot_path = os.path.join(output_dir, "training_metrics.png")
-    plt.savefig(plot_path, dpi=300)
-    plt.close()
-
-    print(f"\n=> Metrics plot successfully saved to: {plot_path}")
+        logger.info("Entity Level (MOUNTAIN):")
+        logger.info(f"  Precision: {metrics['MOUNTAIN']['precision']:.4f}")
+        logger.info(f"  Recall:    {metrics['MOUNTAIN']['recall']:.4f}")
+        logger.info(f"  F1:        {metrics['MOUNTAIN']['f1']:.4f}")
+    logger.info("-" * 60)
