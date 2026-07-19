@@ -1,7 +1,8 @@
 .idea
 .DS_Store
 .ipynb_checkpoints/
-.env
+data_generation/.env
+eda/.env
 __pycache__
 tokenizer_cache
 bert_cache
