@@ -3,21 +3,29 @@ name = "mountains-ner"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
+
+# INFERENCE ONLY
 dependencies = [
-    "evaluate>=0.4.6",
     "fastapi[standard]>=0.139.0",
+    "torch>=2.13.0",
+    "transformers>=5.13.1",
+]
+
+[dependency-groups]
+
+# TRAINING ONLY
+train = [
+    "evaluate>=0.4.6",
     "huggingface>=0.0.1",
     "pandas>=3.0.3",
     "python-dotenv>=1.2.2",
     "scikit-learn>=1.9.0",
     "seaborn>=0.13.2",
     "seqeval>=1.2.2",
-    "torch>=2.13.0",
     "tqdm>=4.68.4",
-    "transformers>=5.13.1",
 ]
 
-[dependency-groups]
+# DEV ONLY
 dev = [
     "ipykernel>=7.3.0",
     "mlflow>=1.27.0",

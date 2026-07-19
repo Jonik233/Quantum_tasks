@@ -1756,16 +1756,8 @@ name = "mountains-ner"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "evaluate" },
     { name = "fastapi", extra = ["standard"] },
-    { name = "huggingface" },
-    { name = "pandas" },
-    { name = "python-dotenv" },
-    { name = "scikit-learn" },
-    { name = "seaborn" },
-    { name = "seqeval" },
     { name = "torch" },
-    { name = "tqdm" },
     { name = "transformers" },
 ]
 
@@ -1777,19 +1769,21 @@ dev = [
     { name = "s3fs" },
     { name = "sagemaker" },
 ]
+train = [
+    { name = "evaluate" },
+    { name = "huggingface" },
+    { name = "pandas" },
+    { name = "python-dotenv" },
+    { name = "scikit-learn" },
+    { name = "seaborn" },
+    { name = "seqeval" },
+    { name = "tqdm" },
+]
 
 [package.metadata]
 requires-dist = [
-    { name = "evaluate", specifier = ">=0.4.6" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.139.0" },
-    { name = "huggingface", specifier = ">=0.0.1" },
-    { name = "pandas", specifier = ">=3.0.3" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "scikit-learn", specifier = ">=1.9.0" },
-    { name = "seaborn", specifier = ">=0.13.2" },
-    { name = "seqeval", specifier = ">=1.2.2" },
     { name = "torch", specifier = ">=2.13.0" },
-    { name = "tqdm", specifier = ">=4.68.4" },
     { name = "transformers", specifier = ">=5.13.1" },
 ]
 
@@ -1800,6 +1794,16 @@ dev = [
     { name = "openai", specifier = ">=2.45.0" },
     { name = "s3fs", specifier = ">=2026.4.0" },
     { name = "sagemaker", specifier = ">=2.0.0,<3.0.0" },
+]
+train = [
+    { name = "evaluate", specifier = ">=0.4.6" },
+    { name = "huggingface", specifier = ">=0.0.1" },
+    { name = "pandas", specifier = ">=3.0.3" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "scikit-learn", specifier = ">=1.9.0" },
+    { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "seqeval", specifier = ">=1.2.2" },
+    { name = "tqdm", specifier = ">=4.68.4" },
 ]
 
 [[package]]
