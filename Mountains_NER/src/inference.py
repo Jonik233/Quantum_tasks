@@ -59,14 +59,18 @@ def predict_fn(text: str, model_dict: dict) -> dict:
         label = label_names[pred_idx]
         confidence = float(prob_array[pred_idx])
 
-        # Clean up Hugging Face's "##" subword prefix for a prettier API response
-        clean_token = token.replace("##", "") if token.startswith("##") else token
-
-        extracted_entities.append({
-            "token": clean_token,
-            "label": label,
-            "confidence": round(confidence, 4)
-        })
+        # If it's a subword (starts with ##) and we have existing entities, merge it
+        if token.startswith("##") and extracted_entities:
+            prev = extracted_entities[-1]
+            prev["token"] += token.replace("##", "")
+            # Updating confidence: average of the sub-tokens
+            prev["confidence"] = round((prev["confidence"] + confidence) / 2, 4)
+        else:
+            extracted_entities.append({
+                "token": token,
+                "label": label,
+                "confidence": round(confidence, 4)
+            })
 
     return {
         "original_text": text,
