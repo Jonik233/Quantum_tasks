@@ -4,16 +4,24 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
 
-# INFERENCE ONLY
+# INFERENCE
 dependencies = [
     "fastapi[standard]>=0.139.0",
     "torch>=2.13.0",
     "transformers>=5.13.1",
 ]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
 [dependency-groups]
 
-# TRAINING ONLY
+# TRAINING
 train = [
     "evaluate>=0.4.6",
     "huggingface>=0.0.1",
@@ -25,7 +33,7 @@ train = [
     "tqdm>=4.68.4",
 ]
 
-# DEV ONLY
+# DEV
 dev = [
     "ipykernel>=7.3.0",
     "mlflow>=1.27.0",
