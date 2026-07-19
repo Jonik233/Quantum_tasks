@@ -5,14 +5,13 @@ from model import DistilBERTClass
 from transformers import DistilBertTokenizerFast
 
 
-def load_model_dict(model_dir: str):
+def load_model(model_dir: str) -> dict:
     """
-    Loads the custom PyTorch model and tokenizer for inference.
+    Loads the custom PyTorch model and tokenizer into memory.
     """
     print(f"Loading model artifacts from: {model_dir}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_dir)
 
     model = DistilBERTClass()
@@ -25,30 +24,51 @@ def load_model_dict(model_dir: str):
     model.to(device)
     model.eval()
 
-    print("Model and tokenizer successfully loaded into memory.")
+    print("=> Model and tokenizer successfully loaded into memory.")
 
     return {"model": model, "tokenizer": tokenizer, "device": device}
 
 
-def predict_fn(input_data, model_dict):
+@torch.no_grad()
+def predict_fn(text: str, model_dict: dict) -> dict:
+    """
+    Takes a raw string, runs NER inference, and returns a clean
+    JSON-serializable dictionary mapping words to entity predictions.
+    """
     model = model_dict["model"]
     tokenizer = model_dict["tokenizer"]
     device = model_dict["device"]
 
-    # Tokenizing input
-    inputs = tokenizer(
-        input_data,
-        return_tensors="pt",
-        truncation=True
-    ).to(device)
+    inputs = tokenizer(text, return_tensors="pt", truncation=True).to(device)
 
-    ids = inputs["input_ids"].to(device)
-    mask = inputs["attention_mask"].to(device)
+    # Logits shape: (batch_size=1, seq_len, num_labels)
+    logits = model(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
 
-    with torch.no_grad():
-        logits = model(ids, mask)
-        probabilities = torch.softmax(logits, dim=1).cpu().numpy()
-        prediction = torch.argmax(logits, dim=-1).detach().cpu().numpy().item()
-        predicted_label = label_names[prediction]
+    probabilities = torch.softmax(logits, dim=-1)[0].cpu().numpy()
+    predictions = torch.argmax(logits, dim=-1)[0].cpu().numpy()
 
-        return {"predicted_label": predicted_label, "probabilities": probabilities.tolist()}
+    tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+
+    extracted_entities = []
+
+    # Filter out special tokens and format the API response
+    for token, pred_idx, prob_array in zip(tokens, predictions, probabilities):
+        if token in ["[CLS]", "[SEP]", "[PAD]"]:
+            continue
+
+        label = label_names[pred_idx]
+        confidence = float(prob_array[pred_idx])
+
+        # Clean up Hugging Face's "##" subword prefix for a prettier API response
+        clean_token = token.replace("##", "") if token.startswith("##") else token
+
+        extracted_entities.append({
+            "token": clean_token,
+            "label": label,
+            "confidence": round(confidence, 4)
+        })
+
+    return {
+        "original_text": text,
+        "predictions": extracted_entities
+    }
