@@ -1,7 +1,7 @@
 # Task 1: Natural Language Processing - Mountain NER
 
 ## Overview
-This repository contains a complete, production-ready pipeline for a Named Entity Recognition (NER) model designed to identify mountain names within natural language text. 
+This repository contains a complete pipeline for a Named Entity Recognition (NER) model designed to identify mountain names within natural language text. 
 
 The solution covers the entire Machine Learning lifecycle:
 1. **Data Engineering:** Hybrid dataset curation combining open-source data with LLM-generated synthetic data.
@@ -10,18 +10,21 @@ The solution covers the entire Machine Learning lifecycle:
 
 ## Project Structure
 
-| File/Folder | Description |
-| :--- | :--- |
-| `data_generation/generate.py` | Script utilizing the OpenAI API to generate and self-correct synthetic training data. |
-| `src/model.py` | Contains the custom `DistilBERTClass` architecture. |
-| `src/train.py` | The PyTorch training loop with MLflow metric tracking. |
-| `src/main.py` | The AWS SageMaker launcher script utilizing the HuggingFace Estimator. |
-| `src/app.py` | The FastAPI application logic utilizing lifespan event handlers. |
-| `src/inference.py` | Inference module for loading the fine-tuned model and extracting entities. |
-| `demo.ipynb` | Jupyter notebook demonstrating the model's inference capabilities via HTTP requests. |
-| `pyproject.toml` & `uv.lock` | Main project dependencies managed via Astral's `uv`. |
-| `src/requirements.txt` | Minimal runtime dependencies strictly scoped for the SageMaker training container. |
-| `Dockerfile` & `Makefile` | Containerization instructions for the FastAPI web service. |
+| File/Folder                       | Description                                                                           |
+|:----------------------------------|:--------------------------------------------------------------------------------------|
+| `eda/kaggle_dataset_eda.ipynb`    | eda notebook for kaggle mountains ner dataset.                                        |
+| `eda/synthetic_dataset_eda.ipynb` | eda notebook for synthetic data that was generated using OpenAI API.                  |
+| `eda/main_eda.ipynb`              | notebook that contains the creation of a final dataset.                               |
+| `data_generation/generate.py`     | Script utilizing the OpenAI API to generate and self-correct synthetic training data. |
+| `src/model.py`                    | Contains the custom `DistilBERTClass` architecture.                                   |
+| `src/train.py`                    | The PyTorch training loop with MLflow metric tracking.                                |
+| `src/main.py`                     | The AWS SageMaker launcher script utilizing the HuggingFace Estimator.                |
+| `src/app.py`                      | The FastAPI application logic utilizing lifespan event handlers.                      |
+| `src/inference.py`                | Inference module for loading the fine-tuned model and extracting entities.            |
+| `demo.ipynb`                      | Jupyter notebook demonstrating the model's inference capabilities via HTTP requests.  |
+| `pyproject.toml` & `uv.lock`      | Main project dependencies managed via Astral's `uv`.                                  |
+| `src/requirements.txt`            | Minimal runtime dependencies strictly scoped for the SageMaker training container.    |
+| `Dockerfile` & `Makefile`         | Containerization instructions for the FastAPI web service.                            |
 
 ## Dependency Management
 This project utilizes a dual-dependency strategy to ensure lightning-fast, bloat-free environments:
@@ -30,8 +33,8 @@ This project utilizes a dual-dependency strategy to ensure lightning-fast, bloat
 
 ## Dataset Curation
 NER models require highly balanced data to correctly learn entity boundaries and the 'Outside' (O) background context. A hybrid data engineering approach was utilized:
-* **Baseline Data:** An open-source Kaggle NER Mountain dataset established ground-truth spans.
-* **Synthetic Generation:** EDA revealed a severe class imbalance (most Kaggle samples contained zero mountains). `data_generation/generate.py` generated 1,000 diverse synthetic records using the OpenAI API to balance the dataset.
+* **Baseline Data:** An open-source Kaggle NER Mountain dataset: https://www.kaggle.com/code/geraygench/mountain-ner-eda-basseline-model?select=mountain_dataset_with_markup.csv
+* **Synthetic Generation:** Since EDA revealed a severe class imbalance (most Kaggle samples contained zero mountains). `data_generation/generate.py` generated 1,000 diverse synthetic records using the OpenAI API to balance the final dataset.
 * **Self-Healing Alignment:** The generation pipeline features a programmatic self-correction algorithm to guarantee that LLM-generated character spans perfectly align with the text, solving the inherent token-counting limitations of LLMs.
 
 ## Model Architecture & Training
@@ -49,6 +52,11 @@ The core model utilizes **DistilBERT** (`distilbert-base-cased`), retaining 95% 
 | **Overall Precision** | 0.9148 |
 | **Overall Recall** | 0.9574 |
 
+You can check complete training logs in `notes/training_metrics.log`
+
+### Training Loss over training steps
+![Traiing loss](plots/train_loss_step.png)
+
 *(See `/reports/improvements.pdf` for further analysis and potential next steps).*
 
 ## Deployment Architecture
@@ -60,7 +68,8 @@ The model is served via a **FastAPI** web service inside a **Docker** container.
 
 ### 1. Model Weights
 Before building the container, download the fine-tuned model artifacts (`best_model.bin`, `config.json`, etc.) and place them inside a `model_artifacts/` directory in the project root.
-**[INSERT LINK TO MODEL WEIGHTS HERE]**
+The trained model artifacts can be downloaded here:
+[Download model.tar.gz](https://qunatum-tasks-bucket.s3.eu-central-1.amazonaws.com/Mountains_NER/output/huggingface-pytorch-training-2026-07-20-12-29-44-225/output/model.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAXSBCNESKUPROYKNH%2F20260720%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260720T214102Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=9e02406a4b12db25da76f41bc94d8df9f8a1fd1472ab418f41b6917bb1bd9ba3)
 
 ### 2. Build and Run the Service
 Ensure Docker is installed and running, then execute the provided Makefile command to build the image and launch the container on port 8080:
