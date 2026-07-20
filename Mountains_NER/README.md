@@ -87,7 +87,7 @@ import requests
 text = "The Andes run through several South American countries."
 start = time.time()
 
-response = requests.post("[http://0.0.0.0:8080/predict](http://0.0.0.0:8080/predict)", json={"query": text}).json()
+response = requests.post("http://0.0.0.0:8080/predict", json={"query": text}).json()
 
 print(f"Text: {response['original_text']}")
 print("\nTokens:")
