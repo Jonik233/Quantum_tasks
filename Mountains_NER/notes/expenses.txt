@@ -10,6 +10,6 @@ Training:
 ------------------------------------------------
 - instance_count=1,
 - instance_type="ml.g6.2xlarge"
-- Training seconds: 265
-- Billable seconds: 265
-- Total costs: around 8 cents
+- Training seconds: 276
+- Billable seconds: 276
+- Total costs: around 9 cents
