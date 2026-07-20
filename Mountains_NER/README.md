@@ -12,9 +12,9 @@ The solution covers the entire Machine Learning lifecycle:
 
 | File/Folder                       | Description                                                                           |
 |:----------------------------------|:--------------------------------------------------------------------------------------|
-| `eda/kaggle_dataset_eda.ipynb`    | eda notebook for kaggle mountains ner dataset.                                        |
-| `eda/synthetic_dataset_eda.ipynb` | eda notebook for synthetic data that was generated using OpenAI API.                  |
-| `eda/main_eda.ipynb`              | notebook that contains the creation of a final dataset.                               |
+| `eda/kaggle_dataset_eda.ipynb`    | EDA notebook for kaggle mountains ner dataset.                                        |
+| `eda/synthetic_dataset_eda.ipynb` | EDA notebook for synthetic data that was generated using OpenAI API.                  |
+| `eda/main_eda.ipynb`              | Notebook that walks through the creation and analysis of a final dataset.             |
 | `data_generation/generate.py`     | Script utilizing the OpenAI API to generate and self-correct synthetic training data. |
 | `src/model.py`                    | Contains the custom `DistilBERTClass` architecture.                                   |
 | `src/train.py`                    | The PyTorch training loop with MLflow metric tracking.                                |
