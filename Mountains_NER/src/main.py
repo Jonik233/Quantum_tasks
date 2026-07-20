@@ -16,11 +16,11 @@ huggingface_estimator = HuggingFace(
     py_version="py310",
     output_path="s3://qunatum-tasks-bucket/Mountains_NER/output/",
     hyperparameters={
-        "epochs": 3,
+        "epochs": 2,
         "train_batch_size": 16,
         "valid_batch_size": 16,
         "learning_rate": 2e-5,
-        "mlflow_tracking_arn": "arn:aws:sagemaker:eu-central-1:519763207317:mlflow-app/app-WHR2A5CWRLEK",
+        "mlflow_tracking_arn": "arn:aws:sagemaker:eu-central-1:519763207317:mlflow-app/app-UF6463PYH2E2",
         "mlflow_experiment_name": "DistilBert_FineTuning",
     },
     enable_sagemaker_metrics=True
