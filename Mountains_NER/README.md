@@ -76,3 +76,47 @@ Ensure Docker is installed and running, then execute the provided Makefile comma
 
 ```bash
 make build-container
+```
+
+### 3. Run Inference
+Once the container is up and running, you can interact with the API using standard HTTP POST requests. You can view the full demonstration in demo.ipynb or run the following Python snippet:
+```
+import time
+import requests
+
+text = "The Andes run through several South American countries."
+start = time.time()
+
+response = requests.post("[http://0.0.0.0:8080/predict](http://0.0.0.0:8080/predict)", json={"query": text}).json()
+
+print(f"Text: {response['original_text']}")
+print("\nTokens:")
+for token in response["predictions"]:
+    print(f"Token {token['token']}: (label: {token['label']}, confidence: {token['confidence']})")
+
+elapsed_time = time.time() - start
+print(f"\nInference time: {elapsed_time}")
+```
+**Expected Output:**
+```
+Text: The Andes run through several South American countries.
+
+Tokens:
+Token The: (label: O, confidence: 0.9987)
+Token Andes: (label: B-MOUNTAIN, confidence: 0.9667)
+Token run: (label: O, confidence: 0.9993)
+Token through: (label: O, confidence: 0.9993)
+Token several: (label: O, confidence: 0.9993)
+Token South: (label: O, confidence: 0.999)
+Token American: (label: O, confidence: 0.9989)
+Token countries: (label: O, confidence: 0.9991)
+Token .: (label: O, confidence: 0.9993)
+
+Inference time: 0.13576912879943848
+```
+
+### 4. Teardown
+After you are done testing the endpoint, cleanly stop and remove the running container by executing:
+```
+make stop-container
+```
