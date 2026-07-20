@@ -57,8 +57,6 @@ You can check complete training logs in `notes/training_metrics.log`
 ### Training Loss over training steps
 ![Traiing loss](plots/train_loss_step.png)
 
-*(See `/reports/improvements.pdf` for further analysis and potential next steps).*
-
 ## Deployment Architecture
 The model is served via a **FastAPI** web service inside a **Docker** container. 
 * **Lifespan Management:** The heavy PyTorch model and tokenizers are loaded into memory exactly once during the application's startup phase (`@asynccontextmanager`) and stored in the application state, ensuring sub-100ms response times for incoming requests.
