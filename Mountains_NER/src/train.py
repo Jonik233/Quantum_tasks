@@ -59,7 +59,7 @@ def train(epoch, model, device, train_dataloader, optimizer, loss_function,
     train_metrics = compute_metrics(metrics_evaluator, epoch_predictions, epoch_labels)
 
     # Loging epoch-wise metrics to MLflow
-    log_metrics(epoch_train_loss, train_metrics, phase="Validation", step=epoch)
+    log_metrics(epoch_train_loss, train_metrics, phase="Training", step=epoch)
     mlflow.log_metric("train_f1_epoch", train_metrics.get('overall_f1', 0), step=epoch)
     mlflow.log_metric("train_precision_epoch", train_metrics.get('overall_precision', 0), step=epoch)
     mlflow.log_metric("train_recall_epoch", train_metrics.get('overall_recall', 0), step=epoch)
