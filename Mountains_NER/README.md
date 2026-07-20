@@ -36,8 +36,6 @@ NER models require highly balanced data to correctly learn entity boundaries and
 * **Baseline Data:** An open-source Kaggle NER Mountain dataset: https://www.kaggle.com/code/geraygench/mountain-ner-eda-basseline-model?select=mountain_dataset_with_markup.csv
 * **Synthetic Generation:** Since EDA revealed a severe class imbalance (most Kaggle samples contained zero mountains). `data_generation/generate.py` generated 1,000 diverse synthetic records using the OpenAI API to balance the final dataset.
 * **Self-Healing Alignment:** The generation pipeline features a programmatic self-correction algorithm to guarantee that LLM-generated character spans perfectly align with the text, solving the inherent token-counting limitations of LLMs.
-* **Dataset link:** You can download complete dataset here:
-[Download dataset](https://qunatum-tasks-bucket.s3.eu-central-1.amazonaws.com/Mountains_NER/data/?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAXSBCNESKUPROYKNH%2F20260720%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260720T215804Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=a315f7ffa6b7cc527201fab68773a8b5470592f870b6e677fceea49b4fe8dbef)
 
 ## Model Architecture & Training
 The core model utilizes **DistilBERT** (`distilbert-base-cased`), retaining 95% of BERT's performance while being 40% smaller and 60% faster, making it ideal for scalable web APIs.
