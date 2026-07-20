@@ -1,135 +1,134 @@
-import os
 import cv2
+import os
 import torch
 import argparse
 import kornia as K
-from kornia.image import image_to_tensor
-from kornia_moons.viz import draw_LAF_matches
+import pandas as pd
 import matplotlib.pyplot as plt
+from algorithm import FeatureMatcher
+from kornia_moons.viz import draw_LAF_matches
 
 
-class LoFTR_Inference:
-    def __init__(self, weights_path=None):
-        """
-        Initializes the LoFTR model and loads custom weights if provided.
-        """
+def save_matches(kp0, kp1, inliers, img1_tensor, img2_tensor, output_path=None, close_fig=True):
+    """Saves keypoint match visualisations using Kornia Moons."""
 
-        # Load the base model
-        self.matcher = K.feature.LoFTR(pretrained='outdoor')
+    if inliers is None or len(inliers) == 0:
+        print("No valid inliers to plot.")
+        return None
 
-        # Load fine-tuned weights if available
-        if weights_path and os.path.exists(weights_path):
-            print(f"Loading custom weights from {weights_path}...")
-            self.matcher.load_state_dict(torch.load(weights_path))
-        else:
-            print("Warning: Custom weights not found. Using default pre-trained weights.")
-
-        self.matcher.eval()
-
-    def match(self, img_path1, img_path2, confidence_min=0.8):
-        """
-        Reads two images from disk, processes them, and extracts keypoints.
-        """
-        # Read images
-        img1 = cv2.imread(img_path1)
-        img2 = cv2.imread(img_path2)
-
-        if img1 is None or img2 is None:
-            raise FileNotFoundError("Could not read one or both image paths.")
-
-        img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
-        img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
-
-        # Convert to tensors
-        tensor1 = self._prepare_tensor(img1)
-        tensor2 = self._prepare_tensor(img2)
-
-        input_dict = {
-            'image0': K.color.rgb_to_grayscale(tensor1),
-            'image1': K.color.rgb_to_grayscale(tensor2)
+    fig = draw_LAF_matches(
+        K.feature.laf_from_center_scale_ori(
+            torch.from_numpy(kp0).view(1, -1, 2),
+            torch.ones(kp0.shape[0]).view(1, -1, 1, 1),
+            torch.ones(kp0.shape[0]).view(1, -1, 1),
+        ),
+        K.feature.laf_from_center_scale_ori(
+            torch.from_numpy(kp1).view(1, -1, 2),
+            torch.ones(kp1.shape[0]).view(1, -1, 1, 1),
+            torch.ones(kp1.shape[0]).view(1, -1, 1),
+        ),
+        torch.arange(kp0.shape[0]).view(-1, 1).repeat(1, 2),
+        K.image.tensor_to_image(img1_tensor),
+        K.image.tensor_to_image(img2_tensor),
+        inliers,
+        draw_dict={
+            'inlier_color': (0.2, 1.0, 0.2),
+            'tentative_color': (1.0, 0.1, 0.1),
+            'vertical': False
         }
+    )
 
-        # Run model
-        with torch.inference_mode():
-            corresp = self.matcher(input_dict)
-
-        # Filter by confidence
-        mask = corresp['confidence'] > confidence_min
-        indices = torch.nonzero(mask, as_tuple=True)
-
-        keypoints0 = corresp['keypoints0'][indices].cpu().numpy()
-        keypoints1 = corresp['keypoints1'][indices].cpu().numpy()
-
-        # Geometric verification (RANSAC)
-        try:
-            fmat, inliers = cv2.findFundamentalMat(keypoints0, keypoints1, cv2.USAC_ACCURATE, 1, 0.99, 100000)
-            inliers = inliers > 0
-        except:
-            inliers = None
-
-        return {
-            'image0': tensor1,
-            'image1': tensor2,
-            'keypoints0': keypoints0,
-            'keypoints1': keypoints1,
-            'inliers': inliers,
-            'total_matches': len(keypoints0),
-            'valid_inliers': int(sum(inliers)[0]) if inliers is not None else 0
-        }
-
-    def _prepare_tensor(self, image):
-        image_tensor = image_to_tensor(image)
-        image_tensor = image_tensor.float().unsqueeze(dim=0) / 255.0
-        return image_tensor
-
-    @staticmethod
-    def save_visualization(match_dict, output_path):
-        """Generates the side-by-side plot and saves it to disk."""
-        fig = draw_LAF_matches(
-            K.feature.laf_from_center_scale_ori(
-                torch.from_numpy(match_dict['keypoints0']).view(1, -1, 2),
-                torch.ones(match_dict['keypoints0'].shape[0]).view(1, -1, 1, 1),
-                torch.ones(match_dict['keypoints0'].shape[0]).view(1, -1, 1),
-            ),
-            K.feature.laf_from_center_scale_ori(
-                torch.from_numpy(match_dict['keypoints1']).view(1, -1, 2),
-                torch.ones(match_dict['keypoints1'].shape[0]).view(1, -1, 1, 1),
-                torch.ones(match_dict['keypoints1'].shape[0]).view(1, -1, 1),
-            ),
-            torch.arange(match_dict['keypoints0'].shape[0]).view(-1, 1).repeat(1, 2),
-            K.tensor_to_image(match_dict['image0']),
-            K.tensor_to_image(match_dict['image1']),
-            match_dict['inliers'],
-            draw_dict={'inlier_color': (0.2, 1, 0.2), 'tentative_color': (1, 0.1, 0.1), 'vertical': False}
-        )
+    if output_path:
+        os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
         plt.savefig(output_path, bbox_inches='tight', dpi=300)
-        print(f"Visualization saved successfully to: {output_path}")
+
+    if close_fig:
         plt.close(fig)
 
 
+
+def match_image_pair(matcher, img1_path, img2_path, out_path=None):
+    """Runs inference on a single cross-season image pair and optionally creates a visualisation."""
+
+    img1 = cv2.cvtColor(cv2.imread(img1_path), cv2.COLOR_BGR2RGB)
+    img2 = cv2.cvtColor(cv2.imread(img2_path), cv2.COLOR_BGR2RGB)
+
+    kp0, kp1, inliers, tensor1, tensor2 = matcher.extract_and_match(img1, img2)
+
+    total_detected = len(kp0)
+    num_inliers = int(sum(inliers)[0]) if inliers is not None else 0
+    inlier_ratio = (num_inliers / total_detected) if total_detected > 0 else 0.0
+
+    if out_path:
+        save_matches(
+            kp0, kp1, inliers, tensor1, tensor2,
+            output_path=out_path
+        )
+
+    return {
+        'kp0': kp0,
+        'kp1': kp1,
+        'inliers': inliers,
+        'num_raw_matches': total_detected,
+        'num_inliers': num_inliers,
+        'inlier_ratio': inlier_ratio,
+        'tensor1': tensor1,
+        'tensor2': tensor2
+    }
+
+
+def run_batch_evaluation(matcher, csv_path, dataset_dir, out_dir=None, min_inlier_thresh=15):
+    """Executes inference across all pairs in dataset_labels.csv and returns metrics DataFrame."""
+
+    df = pd.read_csv(csv_path)
+    results = []
+
+    for idx, row in df.iterrows():
+        patch_id = row['patch_id']
+        path_a = os.path.join(dataset_dir, row['image_A_path'])
+        path_b = os.path.join(dataset_dir, row['image_B_path'])
+
+        save_path = os.path.join(out_dir, f"{patch_id}_match.png") if out_dir else None
+
+        pair_res = match_image_pair(matcher, path_a, path_b, out_path=save_path)
+
+        results.append({
+            'patch_id': patch_id,
+            'image_A_path': row['image_A_path'],
+            'image_B_path': row['image_B_path'],
+            'raw_matches': pair_res['num_raw_matches'],
+            'inliers': pair_res['num_inliers'],
+            'inlier_ratio': pair_res['inlier_ratio'],
+            'success': pair_res['num_inliers'] >= min_inlier_thresh
+        })
+
+    results_df = pd.DataFrame(results)
+
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+        results_df.to_csv(os.path.join(out_dir, "batch_evaluation_metrics.csv"), index=False)
+
+    return results_df
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Cross-Season Satellite Image Matching Inference")
-    parser.add_argument("--img1", type=str, required=True, help="Path to first image (e.g., Summer)")
-    parser.add_argument("--img2", type=str, required=True, help="Path to second image (e.g., Winter)")
-    parser.add_argument("--weights", type=str, default="loftr_satellite_weights.pt",
-                        help="Path to custom model weights")
-    parser.add_argument("--output", type=str, default="match_result.png", help="Path to save the output visualization")
-    parser.add_argument("--conf", type=float, default=0.8, help="Minimum confidence threshold (0.0 to 1.0)")
+    parser = argparse.ArgumentParser(description="Cross-Season Inference Script")
+    parser.add_argument("--img1", default=None, help="Path to Season A image")
+    parser.add_argument("--img2", default=None, help="Path to Season B image")
+    parser.add_argument("--csv", default=None, help="Path to dataset_labels.csv")
+    parser.add_argument("--dataset_dir", default="image_matching_dataset", help="Dataset directory")
+    parser.add_argument("--weights", default=None, help="Model weights path")
+    parser.add_argument("--out", default="inference_output", help="Output directory or file path")
 
     args = parser.parse_args()
+    matcher = FeatureMatcher(weights_path=args.weights)
 
-    # Initialize model
-    engine = LoFTR_Inference(weights_path=args.weights)
-
-    # Run matching
-    print(f"Comparing {args.img1} and {args.img2}...")
-    results = engine.match(args.img1, args.img2, confidence_min=args.conf)
-
-    print(f"Total Keypoints Detected: {results['total_matches']}")
-    print(f"Robust Inlier Matches: {results['valid_inliers']}")
-
-    # Save the output visualization
-    if results['valid_inliers'] > 0:
-        engine.save_visualization(results, args.output)
+    if args.img1 and args.img2:
+        res = match_image_pair(matcher, args.img1, args.img2, out_path=args.out)
+        print(f"Single pair inference finished: {res['num_inliers']} inliers found.")
+    elif args.csv:
+        res_df = run_batch_evaluation(matcher, args.csv, args.dataset_dir, out_dir=args.out)
+        print(f"Batch evaluation finished for {len(res_df)} pairs.")
+        print(f"Mean Inliers: {res_df['inliers'].mean():.2f} | Success Rate: {res_df['success'].mean():.2%}")
     else:
-        print("Not enough reliable matches found to generate a visualization.")
+        print("Please provide --img1 and --img2 for single mode OR --csv for batch mode.")
