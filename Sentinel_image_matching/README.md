@@ -40,3 +40,23 @@ The inference script is built to handle both individual image pairs and automate
 Run the algorithm on two specific images and save the visualization.
 ```bash
 python inference.py --img1 path/to/seasonA.png --img2 path/to/seasonB.png --out match.png
+```
+
+**Batch Evaluation Mode:**
+Execute inference across all patch pairs defined in the dataset CSV.
+```bash
+python inference.py --csv path/to/dataset_labels.csv --dataset_dir path/to/images --out evaluation_results/
+```
+
+**Metrics Addressed**
+During batch evaluation, the script computes critical performance metrics:
+1. **Mean Inliers:** The average number of geometrically verified keypoints found per pair.
+2. **Inlier Ratio (Matching Score):** The ratio of valid inliers against the total raw keypoints detected.
+3. **Success Rate:** The percentage of image pairs that successfully yielded ≥15 robust inlier matches.
+
+## Demo Notebook (demo.ipynb)
+The final demo.ipynb serves as a comprehensive report for the model's capabilities, utilizing functions imported directly from inference.py. It covers:
+1. **Single Pair Inspection:** Visualizing raw feature extraction and geometric inlier filtering.
+2. **Full Dataset Evaluation:** Running the batch inference pipeline.
+3. **Quantitative Analysis:** Displaying the Mean Inliers, Inlier Ratios, and Success Rate distributions.
+4. **Qualitative Verification:** Showcasing visualizations of both the best and worst cross-season matching outcomes.
