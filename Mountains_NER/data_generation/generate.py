@@ -13,6 +13,9 @@ load_dotenv()
 
 
 class Generator:
+    """
+    Class for generating data using OpenAI API
+    """
     def __init__(self, api_client=OpenAI()):
         self.openai_client = api_client
 

@@ -5,16 +5,31 @@ import evaluate
 import argparse
 from tqdm import tqdm
 import torch.nn as nn
+from torch import device
+from typing import Callable
 from logging_utils import logger
 from config import label_names
 from model import DistilBERTClass
 from data_utils import load_dataloaders
+from torch.optim import Adam, Optimizer
+from torch.utils.data import DataLoader
 from transformers import DistilBertTokenizerFast
 from evaluation import compute_metrics, log_metrics
 
 
-def train(epoch, model, device, train_dataloader, optimizer, loss_function,
-          metrics_evaluator, global_step, log_every_n_batches=20):
+def train(epoch: int,
+          model: nn.Module,
+          device: device,
+          train_dataloader: DataLoader,
+          optimizer: Optimizer,
+          loss_function: nn.Module,
+          metrics_evaluator: Callable,
+          global_step: int,
+          log_every_n_batches: int = 20) -> int:
+
+    """
+    Runs a training loop for one epoch.
+    """
     model.train()
 
     epoch_predictions = list()
@@ -68,7 +83,15 @@ def train(epoch, model, device, train_dataloader, optimizer, loss_function,
 
 
 @torch.no_grad()
-def validate(epoch, model, device, val_dataloader, loss_function, metrics_evaluator):
+def validate(epoch: int,
+             model: nn.Module,
+             device: device,
+             val_dataloader: DataLoader,
+             loss_function: nn.Module,
+             metrics_evaluator: Callable) -> float:
+    """
+    Runs a validation loop for one epoch.
+    """
     model.eval()
 
     val_predictions = []
@@ -105,6 +128,9 @@ def validate(epoch, model, device, val_dataloader, loss_function, metrics_evalua
 
 
 def main():
+    """
+    Sets up and runs the training loop for several epochs.
+    """
     logger.info("================ TRAINING STARTED ================")
 
     parser = argparse.ArgumentParser()
@@ -139,7 +165,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DistilBERTClass().to(device)
 
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=args.learning_rate)
+    optimizer = Adam(params=model.parameters(), lr=args.learning_rate)
     loss_function = nn.CrossEntropyLoss(ignore_index=-100)
     evaluator = evaluate.load("seqeval")
 

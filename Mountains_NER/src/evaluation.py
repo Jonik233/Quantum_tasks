@@ -1,8 +1,9 @@
+import numpy as np
 from config import label_names
 from logging_utils import logger
 
 
-def compute_metrics(evaluator, predictions, labels):
+def compute_metrics(evaluator, predictions: np.ndarray, labels: np.ndarray) -> dict:
     """
     Computes seqeval metrics for a given window of predictions.
     """
@@ -31,7 +32,7 @@ def compute_metrics(evaluator, predictions, labels):
     return metrics
 
 
-def log_metrics(loss, metrics: dict, phase: str, step: int):
+def log_metrics(loss: float, metrics: dict, phase: str, step: int) -> None:
     """
     Logs the calculated metrics to the terminal for quick checks.
     """
